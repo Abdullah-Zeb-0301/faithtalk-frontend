@@ -1,22 +1,35 @@
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import authService from "./api/authService";
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
+    setError("");
     
-    if (email === "admin@example.com" && password === "admin123") {
-      navigate("/admin-login");
-    } else {
-      // In a real application, you would validate credentials against a server
-      // For now, we'll just simulate a successful login
-      localStorage.setItem("isAuthenticated", "true");
-      navigate("/chat");
+    try {
+      const response = await authService.login({ email, password });
+      // Store the token and user data
+      authService.storeAuthData(response.data.token, response.data.user);
+      
+      // Check if user is admin and redirect accordingly
+      if (response.data.user.role === 'admin') {
+        navigate("/admin-login");
+      } else {
+        navigate("/chat");
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err.response?.data?.message || "Login failed. Please check your credentials.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -50,7 +63,13 @@ const LoginPage = () => {
           />
         </div>
         {error && <p className="text-red-500 mb-4">{error}</p>}
-        <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition duration-200 font-medium">Login</button>
+        <button 
+          type="submit"
+          disabled={isLoading}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition duration-200 font-medium disabled:bg-blue-400"
+        >
+          {isLoading ? "Logging in..." : "Login"}
+        </button>
         <p className="mt-4 text-center text-gray-600">
           Don't have an account? <span className="text-blue-600 cursor-pointer hover:underline" onClick={() => navigate("/signup")}>Sign up</span>
         </p>

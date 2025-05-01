@@ -1,91 +1,81 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import adminService from "./api/adminService";
+import authService from "./api/authService";
 
 const AdminLoginPage = () => {
   const navigate = useNavigate();
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [users, setUsers] = useState([]);
   const [error, setError] = useState("");
   
-  // Mock user data for admin panel
-  const [users, setUsers] = useState([
-    { id: 1, name: "John Doe", email: "john@example.com", lastActive: "2025-04-05" },
-    { id: 2, name: "Jane Smith", email: "jane@example.com", lastActive: "2025-04-04" },
-    { id: 3, name: "Mike Johnson", email: "mike@example.com", lastActive: "2025-04-06" },
-  ]);
-  
-  // Check if admin is logged in
   useEffect(() => {
-    const adminAuth = localStorage.getItem("adminAuthenticated") === "true";
-    setIsAdminLoggedIn(adminAuth);
-  }, []);
-  
-  const handleAdminLogin = (e) => {
-    e.preventDefault();
+    // Check if user is authenticated and is an admin
+    const user = authService.getUser();
+    if (!user || user.role !== 'admin') {
+      // Redirect non-admin users to the home page
+      navigate("/");
+      return;
+    }
     
-    // Admin validation
-    if (email === "admin@example.com" && password === "admin123") {
-      localStorage.setItem("adminAuthenticated", "true");
-      setIsAdminLoggedIn(true);
+    // Fetch users data
+    fetchUsers();
+  }, [navigate]);
+  
+  const fetchUsers = async () => {
+    try {
+      setIsLoading(true);
+      const response = await adminService.getAllUsers();
+      setUsers(response.data);
       setError("");
-    } else {
-      setError("Invalid admin credentials");
+    } catch (err) {
+      console.error("Error fetching users:", err);
+      setError("Failed to load users: " + (err.response?.data?.message || "Unknown error"));
+    } finally {
+      setIsLoading(false);
     }
   };
   
   const handleLogout = () => {
-    localStorage.removeItem("adminAuthenticated");
-    setIsAdminLoggedIn(false);
+    authService.clearAuthData();
+    navigate("/");
+    // Dispatch event to notify other components about auth change
+    window.dispatchEvent(new Event("auth-change"));
   };
   
-  const handleDeleteUser = (id) => {
-    setUsers(users.filter(user => user.id !== id));
+  const handleDeleteUser = async (userId) => {
+    try {
+      await adminService.deleteUser(userId);
+      // Update the local state after successful deletion
+      setUsers(users.filter(user => user.id !== userId));
+    } catch (err) {
+      console.error("Error deleting user:", err);
+      setError("Failed to delete user: " + (err.response?.data?.message || "Unknown error"));
+    }
   };
   
-  // Admin login form
-  const loginForm = (
-    <div className="flex flex-col items-center justify-center min-h-[80vh]">
-      <h2 className="text-3xl font-bold text-blue-800 mb-6">Admin Login</h2>
-      <form 
-        className="p-6 shadow-lg w-full max-w-md bg-white rounded-lg border border-gray-200" 
-        onSubmit={handleAdminLogin}
-      >
-        <div className="mb-4">
-          <label htmlFor="admin-email" className="block text-gray-700 font-medium mb-2">Admin Email</label>
-          <input 
-            type="email" 
-            id="admin-email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" 
-            required 
-          />
-        </div>
-        <div className="mb-6">
-          <label htmlFor="admin-password" className="block text-gray-700 font-medium mb-2">Admin Password</label>
-          <input 
-            type="password" 
-            id="admin-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" 
-            required 
-          />
-        </div>
-        {error && <p className="text-red-500 mb-4">{error}</p>}
-        <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition duration-200 font-medium">
-          Login as Admin
-        </button>
-        <p className="mt-4 text-center text-gray-600">
-          Back to <span className="text-blue-600 cursor-pointer hover:underline" onClick={() => navigate("/")}>User Login</span>
-        </p>
-      </form>
-    </div>
-  );
+  const handleUpdateRole = async (userId, newRole) => {
+    try {
+      await adminService.updateUserRole(userId, newRole);
+      // Update user in the local state
+      setUsers(users.map(user => 
+        user.id === userId ? { ...user, role: newRole } : user
+      ));
+    } catch (err) {
+      console.error("Error updating user role:", err);
+      setError("Failed to update user role: " + (err.response?.data?.message || "Unknown error"));
+    }
+  };
   
-  // Admin dashboard
-  const adminDashboard = (
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[80vh]">
+        <div className="text-blue-800 text-xl">Loading admin panel...</div>
+      </div>
+    );
+  }
+  
+  return (
     <div className="max-w-4xl mx-auto">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold text-blue-800">Admin Dashboard</h2>
@@ -97,6 +87,12 @@ const AdminLoginPage = () => {
         </button>
       </div>
       
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          {error}
+        </div>
+      )}
+      
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <div className="p-4 bg-blue-700 text-white font-medium">
           <h3 className="text-xl">User Management</h3>
@@ -105,18 +101,31 @@ const AdminLoginPage = () => {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Active</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {users.map(user => (
               <tr key={user.id}>
-                <td className="px-6 py-4 whitespace-nowrap">{user.name}</td>
+                <td className="px-6 py-4 whitespace-nowrap">{user.username}</td>
                 <td className="px-6 py-4 whitespace-nowrap">{user.email}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{user.lastActive}</td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <select
+                    value={user.role}
+                    onChange={(e) => handleUpdateRole(user.id, e.target.value)}
+                    className="border border-gray-300 rounded px-2 py-1"
+                  >
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {new Date(user.createdAt).toLocaleDateString()}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <button 
                     onClick={() => handleDeleteUser(user.id)}
@@ -145,19 +154,17 @@ const AdminLoginPage = () => {
             <p className="text-gray-600">Total Users</p>
           </div>
           <div className="bg-green-50 p-4 rounded-lg text-center">
-            <p className="text-4xl font-bold text-green-800">24</p>
+            <p className="text-4xl font-bold text-green-800">-</p>
             <p className="text-gray-600">Active Conversations</p>
           </div>
           <div className="bg-purple-50 p-4 rounded-lg text-center">
-            <p className="text-4xl font-bold text-purple-800">98%</p>
-            <p className="text-gray-600">User Satisfaction</p>
+            <p className="text-4xl font-bold text-purple-800">-</p>
+            <p className="text-gray-600">API Requests Today</p>
           </div>
         </div>
       </div>
     </div>
   );
-  
-  return isAdminLoggedIn ? adminDashboard : loginForm;
 };
 
 export default AdminLoginPage;

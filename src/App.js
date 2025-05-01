@@ -5,6 +5,7 @@ import SignupPage from "./Signup_page";
 import ChatPage from "./chatpage";
 import AdminLoginPage from "./Adminpage";
 import ProtectedRoute from "./ProtectedRoute";
+import ApiTester from "./ApiTester";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="/admin-login" element={<AdminLoginPage />} />
+          <Route path="/api-test" element={<ApiTester />} />
         </Routes>
       </div>
     </div>

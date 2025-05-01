@@ -1,20 +1,37 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import authService from "./api/authService";
 
 const SignupPage = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSignup = (e) => {
+  const handleSignup = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
+    setError("");
     
-    // In a real application, you would send the data to a server
-    // For now, just store authentication state and redirect
-    localStorage.setItem("isAuthenticated", "true");
-    alert("Account Created! You are now logged in.");
-    navigate("/chat");
+    try {
+      // Register the user with the backend
+      const response = await authService.register({
+        username,
+        email,
+        password
+      });
+      
+      // Store auth data upon successful registration
+      authService.storeAuthData(response.data.token, response.data.user);
+      navigate("/chat");
+    } catch (err) {
+      console.error('Signup error:', err);
+      setError(err.response?.data?.message || "Registration failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -25,12 +42,12 @@ const SignupPage = () => {
         onSubmit={handleSignup}
       >
         <div className="mb-4">
-          <label htmlFor="name" className="block text-gray-700 font-medium mb-2">Full Name</label>
+          <label htmlFor="username" className="block text-gray-700 font-medium mb-2">Username</label>
           <input 
             type="text" 
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            id="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" 
             required 
           />
@@ -57,7 +74,14 @@ const SignupPage = () => {
             required 
           />
         </div>
-        <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition duration-200 font-medium">Sign Up</button>
+        {error && <p className="text-red-500 mb-4">{error}</p>}
+        <button 
+          type="submit"
+          disabled={isLoading} 
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition duration-200 font-medium disabled:bg-blue-400"
+        >
+          {isLoading ? "Creating Account..." : "Sign Up"}
+        </button>
         <p className="mt-4 text-center text-gray-600">
           Already have an account? <span className="text-blue-600 cursor-pointer hover:underline" onClick={() => navigate("/")}>Login</span>
         </p>
