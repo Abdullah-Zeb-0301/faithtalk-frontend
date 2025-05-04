@@ -16,19 +16,21 @@ const SignupPage = () => {
     setError("");
     
     try {
-      // Register the user with the backend
       const response = await authService.register({
         username,
         email,
         password
       });
       
-      // Store auth data upon successful registration
-      authService.storeAuthData(response.data.token, response.data.user);
-      navigate("/chat");
+      if (response.user) {
+        authService.storeAuthData(response.token, response.user);
+        navigate("/chat");
+      } else {
+        throw new Error("Invalid response format from server");
+      }
     } catch (err) {
       console.error('Signup error:', err);
-      setError(err.response?.data?.message || "Registration failed. Please try again.");
+      setError(err.message || "Registration failed. Please try again.");
     } finally {
       setIsLoading(false);
     }

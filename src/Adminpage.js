@@ -10,60 +10,79 @@ const AdminLoginPage = () => {
   const [error, setError] = useState("");
   
   useEffect(() => {
-    // Check if user is authenticated and is an admin
     const user = authService.getUser();
     if (!user || user.role !== 'admin') {
-      // Redirect non-admin users to the home page
       navigate("/");
       return;
     }
     
-    // Fetch users data
     fetchUsers();
   }, [navigate]);
   
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
-      const response = await adminService.getAllUsers();
-      setUsers(response.data);
+      const result = await adminService.getAllUsers();
+      setUsers(Array.isArray(result) ? result : (result.data || []));
       setError("");
     } catch (err) {
       console.error("Error fetching users:", err);
       setError("Failed to load users: " + (err.response?.data?.message || "Unknown error"));
+      setUsers([]);
     } finally {
       setIsLoading(false);
     }
   };
   
   const handleLogout = () => {
-    authService.clearAuthData();
+    authService.logout();
     navigate("/");
-    // Dispatch event to notify other components about auth change
     window.dispatchEvent(new Event("auth-change"));
   };
   
-  const handleDeleteUser = async (userId) => {
-    try {
-      await adminService.deleteUser(userId);
-      // Update the local state after successful deletion
-      setUsers(users.filter(user => user.id !== userId));
-    } catch (err) {
-      console.error("Error deleting user:", err);
-      setError("Failed to delete user: " + (err.response?.data?.message || "Unknown error"));
+  const handleDeleteUser = async (email) => {
+    if (window.confirm('Are you sure you want to delete this user?')) {
+      try {
+        const result = await adminService.deleteUser(email);
+        if (result && (result.message === "User deleted" || result.data?.message === "User deleted")) {
+          setUsers(users.filter(user => user.email !== email));
+          setError("");
+        }
+      } catch (err) {
+        console.error("Error deleting user:", err);
+        if (err.response?.status === 404) {
+          setError("User not found. They may have already been deleted.");
+        } else {
+          setError("Failed to delete user: " + (err.response?.data?.message || "Unknown error"));
+        }
+      }
     }
   };
   
-  const handleUpdateRole = async (userId, newRole) => {
+  const handleUpdateRole = async (email, newRole) => {
     try {
-      await adminService.updateUserRole(userId, newRole);
-      // Update user in the local state
-      setUsers(users.map(user => 
-        user.id === userId ? { ...user, role: newRole } : user
-      ));
+      if (newRole !== 'user' && newRole !== 'admin') {
+        setError("Invalid role specified. Must be 'user' or 'admin'.");
+        return;
+      }
+      
+      const result = await adminService.updateUserRole(email, newRole);
+      const updatedUser = result.user || result.data?.user;
+      if (updatedUser) {
+        setUsers(users.map(user => 
+          user.email === email ? updatedUser : user
+        ));
+        setError("");
+      }
     } catch (err) {
       console.error("Error updating user role:", err);
-      setError("Failed to update user role: " + (err.response?.data?.message || "Unknown error"));
+      if (err.response?.status === 404) {
+        setError("User not found. They may have been deleted.");
+      } else if (err.response?.status === 400) {
+        setError("Invalid role specified.");
+      } else {
+        setError("Failed to update user role: " + (err.response?.data?.message || "Unknown error"));
+      }
     }
   };
   
@@ -116,7 +135,7 @@ const AdminLoginPage = () => {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <select
                     value={user.role}
-                    onChange={(e) => handleUpdateRole(user.id, e.target.value)}
+                    onChange={(e) => handleUpdateRole(user.email, e.target.value)}
                     className="border border-gray-300 rounded px-2 py-1"
                   >
                     <option value="user">User</option>
@@ -128,7 +147,7 @@ const AdminLoginPage = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <button 
-                    onClick={() => handleDeleteUser(user.id)}
+                    onClick={() => handleDeleteUser(user.email)}
                     className="text-red-600 hover:text-red-800"
                   >
                     Delete
@@ -142,26 +161,6 @@ const AdminLoginPage = () => {
         {users.length === 0 && (
           <div className="text-center p-4 text-gray-500">No users found</div>
         )}
-      </div>
-      
-      <div className="mt-8 bg-white shadow-md rounded-lg overflow-hidden">
-        <div className="p-4 bg-blue-700 text-white font-medium">
-          <h3 className="text-xl">System Statistics</h3>
-        </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-blue-50 p-4 rounded-lg text-center">
-            <p className="text-4xl font-bold text-blue-800">{users.length}</p>
-            <p className="text-gray-600">Total Users</p>
-          </div>
-          <div className="bg-green-50 p-4 rounded-lg text-center">
-            <p className="text-4xl font-bold text-green-800">-</p>
-            <p className="text-gray-600">Active Conversations</p>
-          </div>
-          <div className="bg-purple-50 p-4 rounded-lg text-center">
-            <p className="text-4xl font-bold text-purple-800">-</p>
-            <p className="text-gray-600">API Requests Today</p>
-          </div>
-        </div>
       </div>
     </div>
   );

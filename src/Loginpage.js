@@ -16,18 +16,20 @@ const LoginPage = () => {
     
     try {
       const response = await authService.login({ email, password });
-      // Store the token and user data
-      authService.storeAuthData(response.data.token, response.data.user);
       
-      // Check if user is admin and redirect accordingly
-      if (response.data.user.role === 'admin') {
-        navigate("/admin-login");
+      if (response.user) {
+        authService.storeAuthData(response.token, response.user);
+        if (response.user.role === 'admin') {
+          navigate("/admin-login");
+        } else {
+          navigate("/chat");
+        }
       } else {
-        navigate("/chat");
+        throw new Error("Invalid response format from server");
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.response?.data?.message || "Login failed. Please check your credentials.");
+      setError(err.message || "Login failed. Please check your credentials.");
     } finally {
       setIsLoading(false);
     }

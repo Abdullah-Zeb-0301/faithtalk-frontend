@@ -12,7 +12,6 @@ const ChatPage = () => {
   const [user, setUser] = useState(null);
   const chatContainerRef = useRef(null);
   
-  // Auto-scroll to bottom of chat when new messages arrive
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
@@ -20,7 +19,6 @@ const ChatPage = () => {
   }, [chatHistory]);
 
   useEffect(() => {
-    // Get the current user
     const currentUser = authService.getUser();
     setUser(currentUser);
   }, []);
@@ -29,24 +27,24 @@ const ChatPage = () => {
     e.preventDefault();
     if (!message.trim()) return;
     
-    // Add user message to chat
     const userMessage = { id: Date.now(), text: message, sender: "user" };
     setChatHistory(prevChat => [...prevChat, userMessage]);
     
     const currentMessage = message;
-    setMessage(""); // Clear input field immediately after sending
+    setMessage("");
     
     try {
       setIsLoading(true);
       setError("");
       
-      // Send the message to the Groq LLM API using the llmService
-      const response = await llmService.askGroq(currentMessage);
+      const response = await llmService.askLLM(currentMessage);
       
-      // Extract the response text according to the API format
-      const responseText = response.data.choices[0].message.content;
+      if (!response.data?.answer) {
+        throw new Error("Invalid response format from LLM API");
+      }
       
-      // Add the bot response to chat
+      const responseText = response.data.answer;
+      
       const botResponse = { 
         id: Date.now() + 1, 
         text: responseText,
@@ -56,15 +54,23 @@ const ChatPage = () => {
       setChatHistory(prevChat => [...prevChat, botResponse]);
     } catch (err) {
       console.error("Error getting LLM response:", err);
-      setError("Failed to get response: " + (err.response?.data?.message || "Unknown error"));
+      let errorMessage = "I'm sorry, there was an error processing your message. Please try again.";
       
-      // Add an error message to the chat
-      const errorMessage = { 
+      if (err.response?.status === 400 && err.response?.data?.message === "Question is required") {
+        errorMessage = "Please provide a message to send.";
+      } else if (err.response?.status === 500) {
+        errorMessage = "The AI service is currently unavailable. Please try again later.";
+      }
+      
+      setError(errorMessage);
+      
+      const errorResponse = { 
         id: Date.now() + 1, 
-        text: "I'm sorry, there was an error processing your message. Please try again.", 
-        sender: "bot" 
+        text: errorMessage, 
+        sender: "bot",
+        isError: true
       };
-      setChatHistory(prevChat => [...prevChat, errorMessage]);
+      setChatHistory(prevChat => [...prevChat, errorResponse]);
     } finally {
       setIsLoading(false);
     }
